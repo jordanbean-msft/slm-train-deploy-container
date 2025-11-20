@@ -305,6 +305,63 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+*.py[cod]
+*$py.class
+*.so
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.terraform.lock.hcl
+infra/terraform/crash.log
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Model files (large files)
+*.bin
+*.pt
+*.pth
+*.onnx
+*.safetensors
+
+# Data files (exclude actual training data but keep structure)
+data/*
+!data/.gitkeep
+!data/README.md
+!data/*.example
+*.jsonl
+!data/training_data.jsonl.example
+*.csv
+*.parquet
+
+# Docker
+*.tar
+*.tar.gz
 
 # Cake - Uncomment if you are using it
 # tools/**

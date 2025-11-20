@@ -1,0 +1,10 @@
+{"prompt": "Translate to French: Hello", "completion": "Bonjour"}
+{"prompt": "Translate to French: Goodbye", "completion": "Au revoir"}
+{"prompt": "Translate to French: Thank you", "completion": "Merci"}
+{"prompt": "What is the capital of France?", "completion": "The capital of France is Paris."}
+{"prompt": "What is the capital of Germany?", "completion": "The capital of Germany is Berlin."}
+{"prompt": "Summarize: The quick brown fox jumps over the lazy dog.", "completion": "A fox jumps over a dog."}
+{"prompt": "Summarize: Machine learning is a subset of artificial intelligence.", "completion": "ML is part of AI."}
+{"prompt": "Complete: Once upon a time", "completion": "there was a brave knight who lived in a castle."}
+{"prompt": "Complete: The weather today is", "completion": "sunny and warm with a gentle breeze."}
+{"prompt": "Explain: What is photosynthesis?", "completion": "Photosynthesis is the process by which plants convert sunlight into energy."}

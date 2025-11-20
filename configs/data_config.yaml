@@ -1,0 +1,23 @@
+# Data Configuration
+
+# Data source
+input_file: "data/training_data.jsonl"
+output_dir: "data/processed"
+
+# Train/validation split
+validation_split: 0.2
+random_seed: 42
+
+# Azure Blob Storage
+blob_prefix: "training-data"
+overwrite_existing: false
+
+# Dataset registration
+dataset_name: "phi4-fine-tune-dataset"
+dataset_description: "Training dataset for Phi-4 fine-tuning"
+dataset_version: "v1"
+
+# Data validation
+max_prompt_length: 2048
+max_completion_length: 1024
+min_samples: 10

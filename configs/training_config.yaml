@@ -1,0 +1,151 @@
+# Training Configuration
+# Configuration for fine-tuning language models with LoRA
+
+# Model Configuration
+model:
+  name_or_path: "models/phi-4" # Path to downloaded model
+  trust_remote_code: true
+
+# LoRA Configuration
+lora:
+  enabled: true
+  r: 16 # LoRA rank (higher = more parameters)
+  alpha: 32 # LoRA alpha (scaling factor)
+  dropout: 0.05 # LoRA dropout rate
+  target_modules: # Modules to apply LoRA
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+# Training Hyperparameters
+training:
+  # Epochs and batch size
+  num_epochs: 3
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 4 # Effective batch = 4 * 4 = 16
+
+  # Learning rate
+  learning_rate: 2.0e-4
+  lr_scheduler_type: "linear"
+  warmup_steps: 100
+
+  # Regularization
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+
+  # Mixed precision
+  fp16: false
+  bf16: true # Use bfloat16 for better stability
+
+  # Quantization (for memory efficiency)
+  use_8bit: false
+  use_4bit: false # Enable for QLoRA
+
+  # Optimization
+  optim: "adamw_torch"
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+
+# Data Configuration
+data:
+  train_file: "data/processed/train.jsonl"
+  validation_file: "data/processed/validation.jsonl"
+  max_seq_length: 2048
+  prompt_column: "prompt"
+  completion_column: "completion"
+
+  # Data loading
+  dataloader_num_workers: 4
+  dataloader_pin_memory: true
+
+  # Preprocessing
+  preprocessing_num_workers: 8
+
+# Checkpointing
+checkpointing:
+  output_dir: "outputs/training"
+  save_strategy: "steps"
+  save_steps: 500
+  save_total_limit: 3 # Keep only 3 latest checkpoints
+  load_best_model_at_end: true
+
+  # Resume training
+  resume_from_checkpoint: null # Set to checkpoint path to resume
+
+# Logging and Evaluation
+logging:
+  logging_strategy: "steps"
+  logging_steps: 10
+  logging_dir: "outputs/logs"
+
+  # MLflow tracking
+  mlflow:
+    enabled: true
+    experiment_name: "phi-4-finetuning"
+    tracking_uri: null # Set to MLflow server URI
+    run_name: null # Auto-generated if null
+
+evaluation:
+  evaluation_strategy: "steps"
+  eval_steps: 500
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+# Early Stopping
+early_stopping:
+  enabled: false
+  patience: 3
+  threshold: 0.0
+
+# Hardware Configuration
+hardware:
+  # Device settings
+  device: "cuda" # cuda, cpu, or mps
+
+  # Multi-GPU settings
+  use_ddp: false # Distributed Data Parallel
+  num_gpus: 1
+
+  # Memory optimization
+  gradient_checkpointing: false # Enable to save memory
+
+  # Compute settings
+  seed: 42
+
+# Azure ML Integration
+azure_ml:
+  enabled: false # Set true when running on Azure ML
+  workspace_name: null
+  compute_target: "gpu-cluster"
+  experiment_name: "phi-4-training"
+
+  # Data references
+  train_data_ref: "train_data"
+  val_data_ref: "validation_data"
+
+# Advanced Settings
+advanced:
+  # Gradient accumulation
+  gradient_accumulation_strategy: "steps"
+
+  # Model compilation (PyTorch 2.0+)
+  torch_compile: false
+  torch_compile_backend: "inductor"
+  torch_compile_mode: "default"
+
+  # Attention implementation
+  attn_implementation: "flash_attention_2" # Requires flash-attn package
+
+  # Debugging
+  debug_mode: false
+  detect_anomaly: false
+# Notes:
+# - For 24GB GPU: batch_size=4, gradient_accumulation=4
+# - For 48GB GPU: batch_size=8, gradient_accumulation=2
+# - For QLoRA (4-bit): set use_4bit=true, reduce batch_size to 1-2
+# - Flash Attention 2 requires: pip install flash-attn --no-build-isolation

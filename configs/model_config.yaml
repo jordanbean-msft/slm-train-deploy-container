@@ -1,0 +1,56 @@
+# Model Configuration for Azure AI Foundry
+
+# Model to download from Azure AI Foundry
+model:
+  name: "microsoft/phi-4"
+  source: "azure_ai_foundry"
+  description: "Microsoft Phi-4 - Small Language Model optimized for reasoning"
+
+  # Local storage path
+  local_path: "models/phi-4"
+
+  # Model metadata
+  context_length: 16384 # 16K tokens
+  parameters: "14B"
+  license: "Microsoft Research License"
+
+  # Alternative models (uncomment to use)
+  # name: "microsoft/phi-3-mini-4k-instruct"
+  # name: "microsoft/phi-3-small-8k-instruct"
+  # name: "microsoft/phi-3-medium-4k-instruct"
+
+# Azure ML registration settings
+registration:
+  name: "phi-4-base" # Name in Azure ML workspace
+  type: "custom_model"
+
+  tags:
+    source: "azure_ai_foundry"
+    model_family: "phi"
+    version: "4"
+    task: "text-generation"
+
+  description: |
+    Microsoft Phi-4 base model downloaded from Azure AI Foundry.
+    This is the pre-trained model before fine-tuning.
+
+# Download settings
+download:
+  verify_checksum: true
+  retry_attempts: 3
+  retry_delay_seconds: 5
+  timeout_seconds: 3600 # 1 hour for large models
+
+# Model validation
+validation:
+  required_files:
+    - "config.json"
+    - "tokenizer_config.json"
+
+  optional_files:
+    - "pytorch_model.bin"
+    - "model.safetensors"
+    - "tokenizer.json"
+    - "special_tokens_map.json"
+    - "vocab.json"
+    - "merges.txt"

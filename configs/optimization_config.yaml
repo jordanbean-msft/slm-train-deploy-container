@@ -1,0 +1,27 @@
+# Optimization configuration for post-training artifacts
+
+base_model_id: sshleifer/tiny-gpt2 # default small model for local tests
+output_root: models/optimized
+
+quantization:
+  enabled: true
+  method: int8 # options: int8 | int4 | none
+  dtype: fp16 # preferred base dtype before quantization fallback
+
+onnx:
+  enabled: true
+  opset: 17
+  sequence_length: 128
+
+benchmark:
+  repetitions: 3
+  prompt: "Hello"
+  max_new_tokens: 16
+
+targets:
+  max_size_mb: 500 # container constraint guidance
+  max_ram_gb: 4 # inference memory ceiling
+
+notes: |
+  Adjust base_model_id to your fine-tuned model directory or registry ref.
+  If bitsandbytes or onnxruntime are missing, steps will degrade gracefully.

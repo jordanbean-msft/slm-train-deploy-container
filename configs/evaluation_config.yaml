@@ -1,0 +1,12 @@
+# Evaluation configuration
+
+model_path: models/optimized/sshleifer_tiny-gpt2-quant # adjust to fine-tuned model
+dataset_path: data/eval/prompts.txt # plain text file, one prompt per line
+max_samples: 32
+max_new_tokens: 32
+compute_perplexity: true
+compute_length_stats: true
+
+notes: |
+  The dataset file should contain one prompt per line. For quick tests use a
+  handful (<=10) prompts. Perplexity computed with causal LM cross-entropy.
