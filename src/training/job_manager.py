@@ -159,13 +159,19 @@ class AzureMLJobManager:
         """
         job = self.ml_client.jobs.get(job_name)
 
+        # Calculate duration if last_modified_at is available
+        if job.creation_context.last_modified_at:
+            duration = str(
+                job.creation_context.last_modified_at - job.creation_context.created_at
+            )
+        else:
+            duration = "N/A"
+
         return {
             "name": job.name,
             "status": job.status,
             "creation_time": str(job.creation_context.created_at),
-            "duration": str(
-                job.creation_context.last_modified_at - job.creation_context.created_at
-            ),
+            "duration": duration,
             "studio_url": job.studio_url,
         }
 

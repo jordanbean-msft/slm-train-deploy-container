@@ -7,13 +7,15 @@
 
 ## User Scenarios & Testing _(mandatory)_
 
-### User Story 1 - Setup and Upload Training Data (Priority: P1)
+### User Story 1 - Setup and Upload Training Data (Priority: P1) ✅ **COMPLETED**
 
 As a data scientist, I want to prepare my training dataset and upload it to Azure ML datastore so that it's accessible for training jobs in the cloud.
 
 **Why this priority**: Foundation for the entire workflow. Without properly configured training data in Azure ML, no subsequent steps can proceed. This is the critical first step that enables all other functionality.
 
 **Independent Test**: Can be fully tested by preparing a local dataset, running the upload script, and verifying the data appears in Azure ML datastore with correct structure. Delivers a reusable data asset.
+
+**Implementation Status**: ✅ Fully implemented in notebook 01-prepare-data.ipynb with validation, splitting, blob upload, and logging
 
 **Acceptance Scenarios**:
 
@@ -25,13 +27,15 @@ As a data scientist, I want to prepare my training dataset and upload it to Azur
 
 ---
 
-### User Story 2 - Setup Azure ML Workspace and Resources (Priority: P1)
+### User Story 2 - Setup Azure ML Workspace and Resources (Priority: P1) ✅ **COMPLETED**
 
 As a ML engineer, I want to provision and configure an Azure ML workspace with necessary resources within an existing resource group using Azure Developer CLI (azd) so that I have a complete environment for model training with streamlined deployment workflow.
 
 **Why this priority**: Essential infrastructure that must exist before any training can occur. Without the workspace, no Azure ML operations are possible. This establishes the foundation for all subsequent work. Using azd provides a unified deployment experience with environment management.
 
 **Independent Test**: Can be tested by running `azd up` with an existing resource group and verifying Azure ML workspace exists with correct configuration. Delivers a working Azure ML environment with azd integration.
+
+**Implementation Status**: ✅ Fully implemented with Terraform modules and azd integration (azure.yaml, setup-azd.sh script)
 
 **Acceptance Scenarios**:
 
@@ -99,13 +103,15 @@ As a data scientist, I want to implement the training pipeline code (data loadin
 
 ---
 
-### User Story 6 - Run Training Job in Azure ML (Priority: P2)
+### User Story 6 - Run Training Job in Azure ML (Priority: P2) ✅ **COMPLETED**
 
 As a data scientist, I want to submit and run a training job on Azure ML compute cluster so that I can fine-tune the model with my custom dataset at scale.
 
 **Why this priority**: This is the execution phase where all previous setup comes together. It's the primary value delivery point but depends on all previous infrastructure and code being ready.
 
 **Independent Test**: Can be tested by submitting a training job, monitoring its execution, and verifying it completes with trained model artifacts. Delivers the fine-tuned model.
+
+**Implementation Status**: ✅ Fully implemented in notebook 02-submit-training-job.ipynb with job submission, environment management, comprehensive monitoring, and MLflow Azure ML integration
 
 **Acceptance Scenarios**:
 
@@ -117,13 +123,15 @@ As a data scientist, I want to submit and run a training job on Azure ML compute
 
 ---
 
-### User Story 7 - Download Trained Model Weights and Artifacts (Priority: P2)
+### User Story 7 - Download Trained Model Weights and Artifacts (Priority: P2) ⚠️ **PARTIALLY COMPLETED**
 
 As a ML engineer, I want to download the trained model weights and associated artifacts from Azure ML so that I can prepare them for containerization and deployment.
 
 **Why this priority**: Bridge between training and deployment phases. Required to move from Azure ML environment to containerized deployment. Critical for operationalization.
 
 **Independent Test**: Can be tested by running download script with job ID and verifying model files are downloaded locally with correct structure. Delivers deployment-ready model artifacts.
+
+**Implementation Status**: ⚠️ Implemented in notebook 03-download-trained-model.ipynb with checkpoint discovery, artifact download, and model registry integration. Missing: model loading test and inference validation
 
 **Acceptance Scenarios**:
 
@@ -135,13 +143,15 @@ As a ML engineer, I want to download the trained model weights and associated ar
 
 ---
 
-### User Story 8 - Create Optimized Scoring Script for Embedded Deployment (Priority: P2)
+### User Story 8 - Create Optimized Scoring Script for Embedded Deployment (Priority: P2) ⚠️ **MINIMAL IMPLEMENTATION**
 
 As a ML engineer, I want to create a highly optimized scoring script that loads the quantized model efficiently and handles inference requests with minimal latency and memory footprint so that the model can run on resource-constrained embedded hardware.
 
 **Why this priority**: Required for deployment but can be developed in parallel with training. The inference interface must be optimized for embedded constraints (CPU-only, limited memory, fast startup).
 
 **Independent Test**: Can be tested locally by loading the optimized model (ONNX/quantized) with the scoring script and sending test inference requests on CPU. Delivers a validated, embedded-ready inference interface.
+
+**Implementation Status**: ⚠️ Notebook 04-optimize-model.ipynb has function calls but missing: LoRA merge with base model, quantization validation, performance comparisons, and quality preservation checks. Scoring script exists in src/inference/ but notebook integration incomplete
 
 **Acceptance Scenarios**:
 
@@ -153,7 +163,19 @@ As a ML engineer, I want to create a highly optimized scoring script that loads 
 
 ---
 
-### User Story 9 - Create Highly Optimized Container for Embedded Hardware (Priority: P2)
+### User Story 8a - Evaluate Model Quality (Priority: P2) ❌ **NOT IMPLEMENTED**
+
+As a data scientist, I want to evaluate the fine-tuned model against quality metrics (perplexity, accuracy, BLEU/ROUGE) so that I can validate model performance before deployment.
+
+**Why this priority**: Quality gates prevent deploying underperforming models. Critical for production readiness.
+
+**Independent Test**: Can be tested by running evaluation on validation set and generating metrics report.
+
+**Implementation Status**: ❌ Notebook 05-evaluate-model.ipynb contains only placeholder documentation. Missing: entire evaluation pipeline including metrics calculation, test data loading, and comparison reporting
+
+---
+
+### User Story 9 - Create Highly Optimized Container for Embedded Hardware (Priority: P2) ⚠️ **SCRIPTS IMPLEMENTED, NOTEBOOK INCOMPLETE**
 
 As a DevOps engineer, I want to build an aggressively optimized Docker container (<500MB) that includes the quantized model and scoring script so that I can deploy the model to resource-constrained embedded devices.
 
@@ -172,13 +194,19 @@ As a DevOps engineer, I want to build an aggressively optimized Docker container
 
 ---
 
-### User Story 10 - Upload Container to Azure Container Registry (Priority: P2)
+**Implementation Status**: ⚠️ Docker build/push logic exists in scripts/ directory (build_multiarch.sh, push_to_acr.sh) but notebook 06-push-to-acr.ipynb contains only documentation without code integration
+
+---
+
+### User Story 10 - Upload Container to Azure Container Registry (Priority: P2) ❌ **SCRIPTS EXIST, NOTEBOOK EMPTY**
 
 As a DevOps engineer, I want to push the built container image to Azure Container Registry so that it's available for deployment to Azure services and can be pulled for local/embedded deployments.
 
 **Why this priority**: Makes the container available in a central registry for deployment. While important, it's not the final step as we need to actually deploy the container.
 
 **Independent Test**: Can be tested by tagging and pushing the image to ACR, then verifying it appears in the registry. Delivers a centrally hosted, deployment-ready container.
+
+**Implementation Status**: ❌ Notebook 06-push-to-acr.ipynb is documentation-only. Scripts exist (scripts/push_to_acr.sh) but not integrated into notebook workflow
 
 **Acceptance Scenarios**:
 
@@ -190,13 +218,15 @@ As a DevOps engineer, I want to push the built container image to Azure Containe
 
 ---
 
-### User Story 11 - Deploy Container Locally and to Embedded Hardware (Priority: P2)
+### User Story 11 - Deploy Container Locally and to Embedded Hardware (Priority: P2) ❌ **NOT IMPLEMENTED**
 
 As a DevOps engineer, I want to deploy the containerized model both locally for testing and to embedded hardware for production so that I can validate functionality before edge deployment and run inference on resource-constrained devices.
 
 **Why this priority**: Final step that delivers the working inference service. Without deployment, the container remains unused. This completes the end-to-end workflow and enables actual inference.
 
 **Independent Test**: Can be tested by deploying container locally with Docker, running inference requests, then deploying to embedded device (or VM simulating embedded) and validating same functionality. Delivers a production-ready deployed service.
+
+**Implementation Status**: ❌ Notebook 07-deploy-inference.ipynb is documentation-only explaining Azure Container Apps deployment but contains no implementation code
 
 **Acceptance Scenarios**:
 
@@ -270,8 +300,13 @@ As a DevOps engineer, I want to deploy the containerized model both locally for 
 - **FR-002**: System MUST support fine-tuning of pre-trained language models (e.g., GPT-2, LLaMA-based models, Phi models)
 - **FR-003**: System MUST implement checkpointing every N steps (configurable, default 500 steps) to enable training resumption
 - **FR-004**: System MUST log training metrics including loss, learning rate, gradient norm, and throughput to structured log files
+- **FR-004a**: System MUST detect Azure ML environment via AZUREML_RUN_ID environment variable and skip MLflow setup when running in Azure ML (platform manages tracking automatically)
+- **FR-004b**: System MUST set up MLflow tracking (set_experiment, start_run) only when running locally, not in Azure ML jobs
+- **FR-004c**: System MUST use Python module execution pattern (python -m src.training.train) to ensure proper package resolution in Azure ML jobs
 - **FR-005**: System MUST validate training data before starting training and report errors for invalid format, missing fields, or corrupted data
 - **FR-006**: System MUST support GPU acceleration for training with automatic fallback to CPU if GPU unavailable
+- **FR-006a**: Training script imports MUST be ordered: stdlib imports → sys.path modification → project imports to prevent ModuleNotFoundError in Azure ML
+- **FR-006b**: Training script MUST use Path(**file**).resolve().parents[2] to reliably determine project root for sys.path insertion
 - **FR-007**: System MUST allow configuration of hyperparameters: learning rate, batch size, number of epochs, warmup steps, weight decay
 - **FR-008**: System MUST implement early stopping based on validation loss with configurable patience parameter
 - **FR-009**: System MUST save final model in standardized format (e.g., Hugging Face format) with tokenizer configuration

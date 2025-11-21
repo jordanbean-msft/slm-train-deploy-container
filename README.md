@@ -14,43 +14,51 @@ graph TD
     D -->|Copy Terraform outputs| E[Prepare Training Data]
     E -->|JSONL format| F[Upload to Azure Blob]
     F --> G[Register Dataset in Azure ML]
-    G --> H[Download Base Model]
-    H -->|Phi-4 from AI Foundry| I[Submit Training Job]
-    I -->|Fine-tune on GPU| J[Download Trained Model]
-    J --> K[Optimize Model]
-    K -->|Quantize int8/int4| L[Export to ONNX]
-    K --> M[Benchmark Performance]
-    L --> M
-    M --> N[Build Container]
-    N -->|Multi-stage Dockerfile| O[Test Locally]
-    O -->|Health checks| P{Deploy Target?}
-    P -->|ACR| Q[Push to Azure Container Registry]
-    P -->|Embedded| R[Deploy to Edge Device]
-    Q --> S[Production Inference]
-    R --> S
-    S -->|FastAPI endpoint| T[Monitor Performance]
+    G --> H[Create Training Environment]
+    H -->|conda.yaml| I[Build Environment Image]
+    I -->|Docker build in prepare_image experiment| J[Submit Training Job]
+    J -->|Waits for image| K[Job: Preparing Status]
+    K -->|Image ready| L[Download Base Model]
+    L -->|Phi-4 from AI Foundry| M[Job: Running - Fine-tune on GPU]
+    M --> N[Download Trained Model]
+    N --> O[Optimize Model]
+    O -->|Quantize int8/int4| P[Export to ONNX]
+    O --> Q[Benchmark Performance]
+    P --> Q
+    Q --> R[Build Container]
+    R -->|Multi-stage Dockerfile| S[Test Locally]
+    S -->|Health checks| T{Deploy Target?}
+    T -->|ACR| U[Push to Azure Container Registry]
+    T -->|Embedded| V[Deploy to Edge Device]
+    U --> W[Production Inference]
+    V --> W
+    W -->|FastAPI endpoint| X[Monitor Performance]
 
     style A fill:#e1f5ff
     style C fill:#e1f5ff
     style D fill:#e1f5ff
+    style I fill:#fff3cd
+    style K fill:#fff3cd
 ```
 
 ## Overview
 
 This project provides an end-to-end system for:
 
-- Training small language models on Azure ML with GPU acceleration
-- Downloading pre-trained models from Azure AI Foundry
+- **Remote training** of small language models on Azure ML with GPU acceleration
+- Automatic model download from Azure AI Foundry during training
 - Optimizing models with quantization (int8/int4) and ONNX conversion
 - Building minimal container images (<500MB) for embedded deployment
-- Deploying to local environments and embedded Linux devices
+- Deploying to Azure Container Apps and embedded Linux devices
 
 **Target Use Case**: Deploy AI models to resource-constrained embedded hardware with <4GB RAM, CPU-only inference, and <50ms latency requirements.
+
+**Training Approach**: This project uses **remote training only** on Azure ML compute clusters. The base model is automatically downloaded from Azure AI Foundry during the training job, eliminating redundant local downloads.
 
 ## Features
 
 ✅ **Azure ML Integration**: Provision infrastructure and submit training jobs with Terraform and Azure ML SDK
-✅ **AI Foundry Models**: Download Phi-4 mini and other models from Azure AI Foundry catalog
+✅ **Remote Training**: Train on Azure ML compute clusters with automatic model download from Azure AI Foundry
 ✅ **LoRA Fine-tuning**: Efficient parameter-efficient fine-tuning with PEFT
 ✅ **Model Optimization**: Post-training quantization (int8/int4) and ONNX export
 ✅ **Multi-architecture**: Build ARM64 and x86_64 containers
@@ -199,18 +207,20 @@ uv run jupyter notebook
 
 Execute the notebooks in this order:
 
-1. `notebooks/01-setup-infrastructure.ipynb` - Verify Azure resources
-2. `notebooks/02-prepare-data.ipynb` - Prepare and upload training data
-3. `notebooks/03-provision-compute.ipynb` - Provision GPU compute cluster
-4. `notebooks/04-download-model.ipynb` - Download base model from AI Foundry
-5. `notebooks/05-train-model.ipynb` - Test training pipeline locally
-6. `notebooks/06-submit-training-job.ipynb` - Submit training job to Azure ML
-7. `notebooks/07-download-trained-model.ipynb` - Retrieve trained checkpoints & registry model
-8. `notebooks/08-optimize-model.ipynb` - Quantize (int8/int4) & export ONNX, benchmark
-9. `notebooks/09-evaluate-model.ipynb` - Evaluate optimized vs baseline metrics
-10. `notebooks/10-build-container.ipynb` - Build optimized container image (<500MB)
-11. `notebooks/11-push-to-acr.ipynb` - Push to Azure Container Registry
-12. `notebooks/12-deploy-inference.ipynb` - Deploy locally or to embedded device
+1. `notebooks/01-prepare-data.ipynb` - Prepare and upload training data to Azure ML
+2. `notebooks/02-submit-training-job.ipynb` - Create training environment & submit remote training job
+   - **Environment Creation**: Builds Docker image with PyTorch, CUDA, dependencies (5-15 min)
+   - **Job Submission**: Queues training job (waits for environment if needed)
+   - **Training**: Base model auto-downloads from Azure AI Foundry, then fine-tunes on GPU
+3. `notebooks/03-download-trained-model.ipynb` - Retrieve trained checkpoints & registry model
+4. `notebooks/04-optimize-model.ipynb` - Quantize (int8/int4) & export ONNX, benchmark
+5. `notebooks/05-evaluate-model.ipynb` - Evaluate optimized vs baseline metrics
+6. `notebooks/06-push-to-acr.ipynb` - Build and push optimized container image to Azure Container Registry
+7. `notebooks/07-deploy-inference.ipynb` - Deploy to Azure Container Apps or embedded device
+
+**Important**: When running notebook 02, Azure ML automatically builds a Docker environment image (shown in `prepare_image` experiment). Your training job will show "Preparing" status until this image build completes, then transitions to "Running" for actual training.
+
+**Note**: Local training notebooks (download model, train locally) have been moved to `notebooks/archive/` as this workflow focuses on remote training only.
 
 ## Usage Guide
 

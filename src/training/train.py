@@ -1,37 +1,38 @@
-"""
-Main training script for fine-tuning language models.
+"""Main training script for fine-tuning language models.
 
-This script handles the full training pipeline including data loading,
-model setup, training loop, and MLflow tracking.
+Handles full pipeline: data loading, model setup, training loop, checkpointing,
+and optional MLflow tracking.
 """
-
-from src.utils.logging_config import get_logger
-from src.training.trainer import Trainer, TrainingConfig, setup_lora_model
-from src.training.checkpointing import CheckpointManager
-from src.data.dataset_loader import (ConversationDataset, create_data_collator,
-                                     load_tokenizer)
+from src.data.dataset_loader import create_data_collator, load_tokenizer
 import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 import yaml
 from torch.utils.data import DataLoader
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Insert repository root (parent of 'src') into sys.path before importing src.*
+project_root = Path(__file__).resolve().parents[2]
+if str(project_root) not in sys.path:
+    # ensure repository root added for src.* imports
+    sys.path.insert(0, str(project_root))  # noqa: E402
 
+from src.data.dataset_loader import ConversationDataset  # noqa: E402
+from src.training.checkpointing import CheckpointManager  # noqa: E402
+from src.training.trainer import (Trainer, TrainingConfig,  # noqa: E402
+                                  setup_lora_model)
+from src.utils.logging_config import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 
+mlflow: Any = None  # will be set if import succeeds
 try:
-    import mlflow
-
+    import mlflow  # type: ignore
     MLFLOW_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     MLFLOW_AVAILABLE = False
     logger.warning("MLflow not available, tracking disabled")
 
@@ -44,40 +45,58 @@ def load_config(config_path: str) -> dict:
 
 
 def setup_mlflow(config: dict) -> Optional[str]:
-    """Setup MLflow tracking."""
-    if not MLFLOW_AVAILABLE or not config.get("logging", {}).get("mlflow", {}).get(
-        "enabled", False
-    ):
+    """Setup MLflow tracking if enabled; return run id or None.
+
+    Note: When running in Azure ML, skip all MLflow setup - Azure ML handles
+    tracking automatically. Only set up MLflow for local development.
+    """
+    mlflow_cfg = config.get("logging", {}).get("mlflow", {})
+    if not (MLFLOW_AVAILABLE and mlflow_cfg.get("enabled", False)):
         return None
 
-    mlflow_config = config["logging"]["mlflow"]
+    # Detect Azure ML environment - check for AZUREML_RUN_ID env var
+    is_azure_ml = os.environ.get("AZUREML_RUN_ID") is not None
 
-    # Set tracking URI
-    if mlflow_config.get("tracking_uri"):
-        mlflow.set_tracking_uri(mlflow_config["tracking_uri"])
+    if is_azure_ml:
+        # Azure ML environment - do nothing, platform handles everything
+        logger.info("Running in Azure ML - using platform-managed tracking")
+        active = mlflow.active_run()  # type: ignore[attr-defined]
+        return active.info.run_id if active else None
+    else:
+        # Local environment only - set up tracking manually
+        mlflow_config = mlflow_cfg
+        if mlflow_config.get("tracking_uri"):
+            mlflow.set_tracking_uri(  # type: ignore[attr-defined]
+                mlflow_config["tracking_uri"]
+            )
 
-    # Set experiment
-    experiment_name = mlflow_config.get("experiment_name", "model-training")
-    mlflow.set_experiment(experiment_name)
+        experiment_name = mlflow_config.get(
+            "experiment_name", "model-training"
+        )
+        mlflow.set_experiment(experiment_name)  # type: ignore[attr-defined]
 
-    # Start run
-    run_name = mlflow_config.get("run_name")
-    mlflow.start_run(run_name=run_name)
+        run_name = mlflow_config.get("run_name")
+        mlflow.start_run(run_name=run_name)  # type: ignore[attr-defined]
+        logger.info(f"MLflow tracking started: {experiment_name}")
+        active = mlflow.active_run()  # type: ignore[attr-defined]
 
-    # Log parameters
-    mlflow.log_params(
-        {
-            "model": config["model"]["name_or_path"],
-            "num_epochs": config["training"]["num_epochs"],
-            "batch_size": config["training"]["per_device_train_batch_size"],
-            "learning_rate": config["training"]["learning_rate"],
-            "lora_r": config["lora"]["r"],
-            "lora_alpha": config["lora"]["alpha"],
-        }
-    )
+        # Log parameters
+        if active:
+            mlflow.log_params(  # type: ignore[attr-defined]
+                {
+                    "model": config["model"]["name_or_path"],
+                    "num_epochs": config["training"]["num_epochs"],
+                    "batch_size": config["training"][
+                        "per_device_train_batch_size"
+                    ],
+                    "learning_rate": config["training"]["learning_rate"],
+                    "lora_r": config["lora"]["r"],
+                    "lora_alpha": config["lora"]["alpha"],
+                }
+            )
+            return active.info.run_id if active else None
 
-    logger.info(f"MLflow tracking started: {experiment_name}")
-    return mlflow.active_run().info.run_id
+    return None
 
 
 def main(args: argparse.Namespace) -> None:
@@ -89,7 +108,7 @@ def main(args: argparse.Namespace) -> None:
     logger.info(f"Loaded config from {args.config}")
 
     # Setup MLflow
-    run_id = setup_mlflow(config)
+    setup_mlflow(config)
 
     # Set random seed
     seed = config["hardware"]["seed"]
@@ -156,7 +175,9 @@ def main(args: argparse.Namespace) -> None:
         lora_target_modules=config["lora"]["target_modules"],
         num_epochs=config["training"]["num_epochs"],
         batch_size=config["training"]["per_device_train_batch_size"],
-        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+        gradient_accumulation_steps=config["training"][
+            "gradient_accumulation_steps"
+        ],
         learning_rate=config["training"]["learning_rate"],
         weight_decay=config["training"]["weight_decay"],
         warmup_steps=config["training"]["warmup_steps"],
@@ -180,7 +201,7 @@ def main(args: argparse.Namespace) -> None:
     logger.info("Initializing trainer...")
     trainer = Trainer(
         model=model,
-        tokenizer=tokenizer,
+        tokenizer=tokenizer,  # type: ignore[arg-type]
         train_dataloader=train_dataloader,
         eval_dataloader=eval_dataloader,
         config=training_config,
@@ -204,8 +225,11 @@ def main(args: argparse.Namespace) -> None:
         metrics = trainer.train()
 
         # Log final metrics
-        if MLFLOW_AVAILABLE and mlflow.active_run():
-            mlflow.log_metrics(metrics)
+        if (
+            MLFLOW_AVAILABLE
+            and mlflow.active_run()  # type: ignore[attr-defined]
+        ):
+            mlflow.log_metrics(metrics)  # type: ignore[attr-defined]
 
         logger.info(
             "Training completed successfully",
@@ -215,7 +239,7 @@ def main(args: argparse.Namespace) -> None:
         # Save final model
         final_checkpoint = checkpoint_manager.save_checkpoint(
             model=model,
-            tokenizer=tokenizer,
+            tokenizer=tokenizer,  # type: ignore[arg-type]
             step=trainer.global_step,
             epoch=trainer.current_epoch,
             loss=metrics["avg_loss"],
@@ -229,13 +253,18 @@ def main(args: argparse.Namespace) -> None:
         raise
 
     finally:
-        # End MLflow run
-        if MLFLOW_AVAILABLE and mlflow.active_run():
-            mlflow.end_run()
+        # End MLflow run only if we started it (not in Azure ML)
+        if MLFLOW_AVAILABLE:
+            active = mlflow.active_run()  # type: ignore[attr-defined]
+            # Only end run if it was started locally (has run_name we set)
+            if active and active.data.tags.get("mlflow.runName"):
+                mlflow.end_run()  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train language model with LoRA")
+    parser = argparse.ArgumentParser(
+        description="Train language model with LoRA"
+    )
     parser.add_argument(
         "--config",
         type=str,

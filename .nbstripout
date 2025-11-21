@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "kernelspec": true,
+    "language_info": {
+      "codemirror_mode": true,
+      "version": true,
+      "pygments_lexer": true,
+      "nbconvert_exporter": true,
+      "file_extension": true,
+      "mimetype": true
+    }
+  },
+  "cell": {
+    "metadata": {
+      "ExecuteTime": true,
+      "execution": true,
+      "scrolled": true
+    }
+  }
+}
