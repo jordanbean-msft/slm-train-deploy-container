@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: slm-train-deploy
+metadata:
+  template: slm-train-deploy-container@0.0.1-beta
+
+# Infra configuration
+infra:
+  provider: terraform
+  path: infra/terraform
+  module: main
+
+# Azure Developer CLI will pass environment variables to Terraform as TF_VAR_* variables
+# Terraform will automatically use TF_VAR_resource_group_name, TF_VAR_location, etc.
+
+# Hooks for deployment lifecycle
+hooks:
+  preprovision:
+    posix:
+      shell: sh
+      run: |
+        echo "Validating environment configuration..."
+        if [ -z "$AZURE_RESOURCE_GROUP_NAME" ]; then
+          echo "ERROR: AZURE_RESOURCE_GROUP_NAME must be set"
+          exit 1
+        fi
+        if [ -z "$AZURE_LOCATION" ]; then
+          echo "ERROR: AZURE_LOCATION must be set"
+          exit 1
+        fi
+        if [ -z "$AZURE_ENV_NAME" ]; then
+          echo "ERROR: AZURE_ENV_NAME must be set"
+          exit 1
+        fi
+        echo "Checking if resource group exists..."
+        if ! az group show --name "$AZURE_RESOURCE_GROUP_NAME" >/dev/null 2>&1; then
+          echo "ERROR: Resource group '$AZURE_RESOURCE_GROUP_NAME' does not exist"
+          echo "Create it with: az group create --name $AZURE_RESOURCE_GROUP_NAME --location $AZURE_LOCATION"
+          exit 1
+        fi
+        echo "Environment validation passed"
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Validating environment configuration..."
+        if ([string]::IsNullOrEmpty($env:AZURE_RESOURCE_GROUP_NAME)) {
+          Write-Error "AZURE_RESOURCE_GROUP_NAME must be set"
+          exit 1
+        }
+        if ([string]::IsNullOrEmpty($env:AZURE_LOCATION)) {
+          Write-Error "AZURE_LOCATION must be set"
+          exit 1
+        }
+        if ([string]::IsNullOrEmpty($env:AZURE_ENV_NAME)) {
+          Write-Error "AZURE_ENV_NAME must be set"
+          exit 1
+        }
+        Write-Host "Checking if resource group exists..."
+        try {
+          az group show --name $env:AZURE_RESOURCE_GROUP_NAME | Out-Null
+        } catch {
+          Write-Error "Resource group '$env:AZURE_RESOURCE_GROUP_NAME' does not exist"
+          Write-Host "Create it with: az group create --name $env:AZURE_RESOURCE_GROUP_NAME --location $env:AZURE_LOCATION"
+          exit 1
+        }
+        Write-Host "Environment validation passed"
+
+  postprovision:
+    posix:
+      shell: sh
+      run: |
+        echo "Infrastructure provisioning complete!"
+        echo ""
+        echo "Next steps:"
+        echo "1. Configure .env file with Terraform outputs: azd env get-values > .env"
+        echo "2. Upload training data: jupyter notebook notebooks/01-upload-training-data.ipynb"
+        echo "3. Start training workflow: jupyter notebook notebooks/02-setup-compute.ipynb"
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Infrastructure provisioning complete!"
+        Write-Host ""
+        Write-Host "Next steps:"
+        Write-Host "1. Configure .env file with Terraform outputs: azd env get-values > .env"
+        Write-Host "2. Upload training data: jupyter notebook notebooks/01-upload-training-data.ipynb"
+        Write-Host "3. Start training workflow: jupyter notebook notebooks/02-setup-compute.ipynb"

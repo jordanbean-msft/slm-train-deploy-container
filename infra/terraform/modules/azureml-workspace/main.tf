@@ -1,48 +1,10 @@
-variable "resource_group_name" {
-  description = "Name of the resource group"
-  type        = string
-}
-
-variable "location" {
-  description = "Azure region"
-  type        = string
-}
-
-variable "workspace_name" {
-  description = "Name of the Azure ML workspace"
-  type        = string
-}
-
-variable "storage_account_id" {
-  description = "ID of the storage account"
-  type        = string
-}
-
-variable "container_registry_id" {
-  description = "ID of the container registry"
-  type        = string
-}
-
-variable "application_insights_id" {
-  description = "ID of the Application Insights instance"
-  type        = string
-  default     = null
-}
-
-variable "key_vault_id" {
-  description = "ID of the Key Vault"
-  type        = string
-  default     = null
-}
-
-variable "tags" {
-  description = "Tags to apply to resources"
-  type        = map(string)
-  default     = {}
+module "naming" {
+  source = "Azure/naming/azurerm"
+  suffix = [var.suffix]
 }
 
 resource "azurerm_machine_learning_workspace" "main" {
-  name                    = var.workspace_name
+  name                    = module.naming.machine_learning_workspace.name
   location                = var.location
   resource_group_name     = var.resource_group_name
   storage_account_id      = var.storage_account_id
@@ -51,23 +13,39 @@ resource "azurerm_machine_learning_workspace" "main" {
   key_vault_id            = var.key_vault_id
 
   identity {
-    type = "SystemAssigned"
+    type = "UserAssigned"
+    identity_ids = [
+      var.user_assigned_identity_id
+    ]
   }
+
+  primary_user_assigned_identity = var.user_assigned_identity_id
 
   tags = var.tags
 }
 
-output "workspace_id" {
-  description = "ID of the Azure ML workspace"
-  value       = azurerm_machine_learning_workspace.main.id
-}
+resource "azurerm_monitor_diagnostic_setting" "workspace" {
+  name                       = "diag-${azurerm_machine_learning_workspace.main.name}"
+  target_resource_id         = azurerm_machine_learning_workspace.main.id
+  log_analytics_workspace_id = var.log_analytics_workspace_id
 
-output "workspace_name" {
-  description = "Name of the Azure ML workspace"
-  value       = azurerm_machine_learning_workspace.main.name
-}
+  enabled_log {
+    category = "AmlComputeClusterEvent"
+  }
 
-output "discovery_url" {
-  description = "Discovery URL for the workspace"
-  value       = azurerm_machine_learning_workspace.main.discovery_url
+  enabled_log {
+    category = "AmlComputeClusterNodeEvent"
+  }
+
+  enabled_log {
+    category = "AmlComputeJobEvent"
+  }
+
+  enabled_log {
+    category = "AmlRunStatusChangedEvent"
+  }
+
+  metric {
+    category = "AllMetrics"
+  }
 }

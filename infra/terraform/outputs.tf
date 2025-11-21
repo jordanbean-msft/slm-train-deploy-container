@@ -1,6 +1,6 @@
 output "resource_group_name" {
   description = "Name of the resource group"
-  value       = azurerm_resource_group.main.name
+  value       = data.azurerm_resource_group.main.name
 }
 
 output "storage_account_name" {
@@ -36,4 +36,18 @@ output "workspace_id" {
 output "compute_cluster_name" {
   description = "Name of the compute cluster"
   value       = module.compute_cluster.compute_name
+}
+output "user_assigned_identity_id" {
+  description = "ID of the user-assigned managed identity"
+  value       = azurerm_user_assigned_identity.main.id
+}
+
+output "user_assigned_identity_principal_id" {
+  description = "Principal ID of the user-assigned managed identity"
+  value       = azurerm_user_assigned_identity.main.principal_id
+}
+
+output "user_assigned_identity_client_id" {
+  description = "Client ID of the user-assigned managed identity"
+  value       = azurerm_user_assigned_identity.main.client_id
 }

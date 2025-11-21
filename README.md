@@ -4,6 +4,37 @@ Train small language models (SLMs) using Azure ML and deploy them as highly opti
 
 ![architecture](./.img/architecture.png)
 
+## Workflow Overview
+
+```mermaid
+graph TD
+    A[Setup Environment] -->|uv sync| B[Azure Authentication]
+    B -->|az login| C[Provision with Terraform]
+    C -->|Creates resources| D[Configure .env]
+    D -->|Copy Terraform outputs| E[Prepare Training Data]
+    E -->|JSONL format| F[Upload to Azure Blob]
+    F --> G[Register Dataset in Azure ML]
+    G --> H[Download Base Model]
+    H -->|Phi-4 from AI Foundry| I[Submit Training Job]
+    I -->|Fine-tune on GPU| J[Download Trained Model]
+    J --> K[Optimize Model]
+    K -->|Quantize int8/int4| L[Export to ONNX]
+    K --> M[Benchmark Performance]
+    L --> M
+    M --> N[Build Container]
+    N -->|Multi-stage Dockerfile| O[Test Locally]
+    O -->|Health checks| P{Deploy Target?}
+    P -->|ACR| Q[Push to Azure Container Registry]
+    P -->|Embedded| R[Deploy to Edge Device]
+    Q --> S[Production Inference]
+    R --> S
+    S -->|FastAPI endpoint| T[Monitor Performance]
+
+    style A fill:#e1f5ff
+    style C fill:#e1f5ff
+    style D fill:#e1f5ff
+```
+
 ## Overview
 
 This project provides an end-to-end system for:
@@ -29,11 +60,13 @@ This project provides an end-to-end system for:
 ## Prerequisites
 
 - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) installed and configured
+- [Azure Developer CLI (azd)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) for infrastructure deployment
 - [Terraform](https://www.terraform.io/downloads) >= 1.6
 - [Python 3.11+](https://www.python.org/downloads/)
 - [uv](https://docs.astral.sh/uv/) - Ultra-fast Python package manager
 - [Docker](https://docs.docker.com/get-docker/) for container builds
 - Azure subscription with sufficient GPU quota for training
+- Existing Azure Resource Group (create with: `az group create --name <rg-name> --location eastus`)
 
 ## Quick Start
 
@@ -51,30 +84,37 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 ```
 
-### 2. Configure Azure Credentials
+### 2. Authenticate with Azure
 
 ```bash
-# Copy environment template
-cp .env.template .env
-
-# Edit .env with your Azure credentials
-# Required values:
-#   - AZURE_SUBSCRIPTION_ID
-#   - AZURE_TENANT_ID
-#   - AZURE_RESOURCE_GROUP
-#   - AZURE_LOCATION (default: eastus)
-#   - AZUREML_WORKSPACE_NAME
-#   - AZURE_STORAGE_ACCOUNT_NAME
-#   - AZURE_CONTAINER_REGISTRY_NAME
-
-# Authenticate with Azure
+# Login to Azure
 az login
 az account set --subscription <your-subscription-id>
 ```
 
-### 3. Provision Azure Infrastructure (Optional - via Terraform)
+### 3. Provision Azure Infrastructure with Azure Developer CLI
 
-If you need to provision Azure resources via Terraform:
+```bash
+# Run the interactive setup script (recommended)
+./scripts/setup-azd.sh
+
+# The script will:
+#   - Verify prerequisites (azd, Azure CLI)
+#   - Create or select an azd environment
+#   - Prompt for required configuration (resource group, location)
+#   - Configure naming (prefix/suffix for terraform-azurerm-naming module)
+#   - Set all environment variables for Terraform
+
+# After setup, deploy infrastructure
+azd up
+
+# Or just provision without deployment
+azd provision
+```
+
+**Alternative: Direct Terraform Deployment**
+
+If you prefer to use Terraform directly without azd:
 
 ```bash
 # Navigate to Terraform directory
@@ -84,16 +124,39 @@ cd infra/terraform
 terraform init
 
 # Review and customize dev.tfvars
+# Update resource names (storage account, ACR, workspace) as needed
 # Apply configuration (dev environment)
 terraform apply -var-file=environments/dev.tfvars
 
+# Note the output values - you'll need these for the next step
 # Return to project root
 cd ../..
 ```
 
-**Note**: If you already have Azure ML workspace, storage account, and ACR provisioned, you can skip this step and just configure them in `.env`.
+### 4. Configure Environment Variables (After Provisioning)
 
-### 4. Prepare Training Data
+**Important**: Run this step AFTER `azd up` or `azd provision` completes. The `.env` file should contain actual resource names created by Terraform, not input values.
+
+```bash
+# If using azd, export Terraform outputs to .env
+azd env get-values > .env
+
+# If using Terraform directly, copy template and fill in values
+cp .env.template .env
+
+# Edit .env and populate with values from Terraform outputs:
+#   - AZURE_SUBSCRIPTION_ID (your subscription)
+#   - AZURE_TENANT_ID (your tenant)
+#   - AZURE_RESOURCE_GROUP (from Terraform)
+#   - AZURE_LOCATION (from Terraform, e.g., eastus)
+#   - AZUREML_WORKSPACE_NAME (from Terraform output: workspace_name)
+#   - AZURE_STORAGE_ACCOUNT_NAME (from Terraform output: storage_account_name)
+#   - AZURE_CONTAINER_REGISTRY_NAME (from Terraform output: acr_name)
+```
+
+**Note**: The `.env` file contains the actual resource names created by Terraform. These may differ from input names if Terraform applies transformations or adds suffixes for uniqueness.
+
+### 5. Prepare Training Data
 
 Place your training data in JSONL format at `data/training_data.jsonl`:
 
@@ -122,7 +185,7 @@ cp data/training_data.jsonl.example data/training_data.jsonl
 
 See `data/README.md` for detailed format requirements and examples.
 
-### 5. Run Training Workflow
+### 6. Run Training Workflow
 
 Start Jupyter and execute notebooks in sequence:
 
@@ -269,6 +332,144 @@ slm-train-deploy-container/
 ├── tests/                 # Test suite
 └── scripts/               # Utility scripts
 ```
+
+## Azure Developer CLI (azd) Integration
+
+This project supports deployment via Azure Developer CLI (azd) for streamlined infrastructure management.
+
+### Why Use azd?
+
+- **Simplified Deployment**: Single `azd up` command provisions all infrastructure
+- **Environment Management**: Easy switching between dev/staging/prod environments
+- **Integrated Workflow**: Combines infrastructure (Terraform) with application deployment
+- **State Management**: Automatic handling of deployment state per environment
+
+### azd Setup
+
+```bash
+# Run the interactive setup script
+./scripts/setup-azd.sh
+```
+
+The script will:
+
+1. Check for azd and Azure CLI installation
+2. Create or select an azd environment
+3. Prompt for required configuration:
+   - Resource group name (must exist or will be created)
+   - Azure location (e.g., eastus)
+   - Environment name (e.g., dev, prod)
+4. **Configure naming with terraform-azurerm-naming module**:
+   - Uses environment name as suffix
+   - Terraform automatically generates consistent names:
+     - Storage account: `st-{suffix}` with unique hash (e.g., `st-dev-a1b2c3d4`)
+     - Container registry: `acr-{suffix}` with unique hash (e.g., `acr-dev-a1b2c3d4`)
+     - ML workspace: `mlw-{suffix}` (e.g., `mlw-dev`)
+5. Set all Terraform input variables (TF*VAR*\* prefix)
+
+**After provisioning**, export Terraform outputs:
+
+```bash
+azd env get-values > .env
+```
+
+### azd Commands
+
+```bash
+# Deploy everything (infrastructure + app)
+azd up
+
+# Provision infrastructure only
+azd provision
+
+# View environment configuration
+azd env get-values
+
+# Export configuration to .env file
+azd env get-values > .env
+
+# Switch environments
+azd env select <environment-name>
+
+# Create new environment
+azd env new <environment-name>
+
+# Tear down all resources
+azd down
+
+# View logs and monitoring
+azd monitor
+```
+
+### Environment Configuration
+
+Required Terraform input variables (set via `setup-azd.sh` with TF*VAR* prefix):
+
+| Variable                    | Description                                  | Example                                |
+| --------------------------- | -------------------------------------------- | -------------------------------------- |
+| `AZURE_SUBSCRIPTION_ID`     | Azure subscription ID                        | `00000000-0000-0000-0000-000000000000` |
+| `AZURE_RESOURCE_GROUP_NAME` | Existing resource group                      | `rg-slm-training-dev`                  |
+| `AZURE_LOCATION`            | Azure region                                 | `eastus`                               |
+| `TF_VAR_suffix`             | Resource name suffix (typically environment) | `["dev"]` or `["prod"]`                |
+| `TF_VAR_acr_sku`            | Container registry SKU                       | `Basic`, `Standard`, or `Premium`      |
+| `TF_VAR_compute_vm_size`    | VM size for training                         | `Standard_NC6s_v3`                     |
+
+**Note**: The `terraform-azurerm-naming` module automatically generates globally unique resource names using the suffix (environment name). Storage accounts and container registries include a unique hash to ensure global uniqueness.
+
+### azd Hooks
+
+The `azure.yaml` configuration includes lifecycle hooks:
+
+**Pre-provision**: Validates configuration and resource group existence
+**Post-provision**: Displays next steps and output values
+
+### Managing Multiple Environments
+
+```bash
+# Create dev environment
+azd env new dev
+./scripts/setup-azd.sh  # Configure with dev settings
+azd up
+
+# Create prod environment
+azd env new prod
+./scripts/setup-azd.sh  # Configure with prod settings
+azd up
+
+# Switch between them
+azd env select dev
+azd env select prod
+```
+
+### Troubleshooting azd
+
+**Issue**: `azd: command not found`
+
+```bash
+# Install azd
+curl -fsSL https://aka.ms/install-azd.sh | bash
+```
+
+**Issue**: Resource group doesn't exist
+
+```bash
+# Create it first
+az group create --name <rg-name> --location eastus
+# Then run azd setup again
+./scripts/setup-azd.sh
+```
+
+**Issue**: Name conflicts (storage/ACR already taken)
+
+```bash
+# The terraform-azurerm-naming module handles uniqueness automatically
+# If conflicts occur, use different prefix/suffix values
+azd env set TF_VAR_prefix '["myproject"]'
+azd env set TF_VAR_suffix '["prod"]'
+azd provision
+```
+
+For more details, see [infra/terraform/README.azd.md](infra/terraform/README.azd.md).
 
 ## Performance Targets
 

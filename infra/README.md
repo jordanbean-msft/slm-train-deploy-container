@@ -28,6 +28,8 @@ infra/
 
 ## Azure Resources
 
+The infrastructure uses a **user-assigned managed identity** for secure authentication between Azure services. This identity is shared across the Azure ML workspace and compute cluster, with appropriate RBAC permissions assigned for accessing storage and container registry resources.
+
 ### Resource Group
 
 - **Purpose**: Logical container for all resources
@@ -51,13 +53,17 @@ infra/
 ### Azure ML Workspace
 
 - **Purpose**: Centralized ML experiment tracking, model management
-- **Identity**: System-assigned managed identity
+- **Identity**: User-assigned managed identity (shared with compute cluster)
 - **Integration**: Connected to storage account and ACR
 - **Features**: Compute management, dataset registration, job submission
+- **RBAC Permissions**: The user-assigned managed identity has the following permissions:
+  - Storage Blob Data Contributor on storage account
+  - AcrPull on container registry
 
 ### Compute Cluster (Optional)
 
 - **Purpose**: GPU-accelerated training
+- **Identity**: User-assigned managed identity (shared with workspace)
 - **VM Sizes**:
   - Dev: `Standard_NC6s_v3` (V100)
   - Prod: `NC24ads_A100_v4` (A100)

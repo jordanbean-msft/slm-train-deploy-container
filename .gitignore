@@ -331,6 +331,10 @@ infra/terraform/*.tfstate.*
 infra/terraform/.terraform.lock.hcl
 infra/terraform/crash.log
 
+# Azure Developer CLI
+.azure/
+!.azure/.env.template
+
 # MLflow
 mlruns/
 mlartifacts/

@@ -27,19 +27,21 @@ As a data scientist, I want to prepare my training dataset and upload it to Azur
 
 ### User Story 2 - Setup Azure ML Workspace and Resources (Priority: P1)
 
-As a ML engineer, I want to provision and configure an Azure ML workspace with necessary resources so that I have a complete environment for model training.
+As a ML engineer, I want to provision and configure an Azure ML workspace with necessary resources within an existing resource group using Azure Developer CLI (azd) so that I have a complete environment for model training with streamlined deployment workflow.
 
-**Why this priority**: Essential infrastructure that must exist before any training can occur. Without the workspace, no Azure ML operations are possible. This establishes the foundation for all subsequent work.
+**Why this priority**: Essential infrastructure that must exist before any training can occur. Without the workspace, no Azure ML operations are possible. This establishes the foundation for all subsequent work. Using azd provides a unified deployment experience with environment management.
 
-**Independent Test**: Can be tested by running infrastructure deployment script and verifying Azure ML workspace exists with correct configuration. Delivers a working Azure ML environment.
+**Independent Test**: Can be tested by running `azd up` with an existing resource group and verifying Azure ML workspace exists with correct configuration. Delivers a working Azure ML environment with azd integration.
 
 **Acceptance Scenarios**:
 
-1. **Given** Azure subscription credentials and resource group name, **When** I run the infrastructure provisioning script (Bicep/Terraform), **Then** the system creates Azure ML workspace, storage account, key vault, and application insights
-2. **Given** infrastructure deployment is complete, **When** I verify the resources, **Then** I see all components properly linked (workspace connected to storage, key vault, app insights)
-3. **Given** I need to configure authentication, **When** I run the setup script, **Then** the system configures managed identity or service principal with appropriate RBAC roles
-4. **Given** workspace is provisioned, **When** I access Azure ML Studio, **Then** I can navigate the workspace and see all configured resources
-5. **Given** deployment fails due to quota limits or permissions, **When** the error occurs, **Then** the system provides specific error messages with remediation steps (request quota increase, required roles)
+1. **Given** Azure subscription credentials, existing resource group name, and azd configuration (azure.yaml), **When** I run `azd up` or `azd provision`, **Then** the system deploys Terraform infrastructure creating Azure ML workspace, storage account, and container registry within the existing resource group
+2. **Given** azd deployment is complete, **When** I verify the resources, **Then** I see all components properly linked (workspace connected to storage and container registry) and azd stores deployment state
+3. **Given** I need to configure authentication, **When** I run azd commands, **Then** the system uses Azure CLI authentication and the provided resource group without attempting to create it
+4. **Given** workspace is provisioned via azd, **When** I access Azure ML Studio, **Then** I can navigate the workspace and see all configured resources
+5. **Given** I want to use different environments, **When** I run `azd env new <env-name>` and `azd up`, **Then** azd manages environment-specific configurations and deploys to the specified environment
+6. **Given** deployment fails due to missing resource group, invalid names, or permissions, **When** the error occurs, **Then** azd and Terraform provide specific error messages with remediation steps (create resource group, check naming constraints, required roles)
+7. **Given** I want to tear down resources, **When** I run `azd down`, **Then** azd destroys all provisioned infrastructure while preserving the resource group
 
 ---
 
@@ -330,7 +332,7 @@ As a DevOps engineer, I want to deploy the containerized model both locally for 
 
 #### Infrastructure Requirements
 
-- **FR-049**: System MUST provide Infrastructure as Code (Terraform) for Azure ML workspace and supporting resources
+- **FR-049**: System MUST provide Infrastructure as Code (Terraform) for Azure ML workspace and supporting resources that operates within an existing Azure resource group. Resource naming MUST be managed through the terraform-azurerm-naming module to ensure consistent naming conventions across all Azure resources. The naming module MUST be invoked within each Terraform module (storage, container-registry, azureml-workspace, compute-cluster) with a suffix parameter (typically the environment name). Identity management MUST use a user-assigned managed identity shared across Azure ML workspace and compute cluster resources. The user-assigned managed identity MUST be granted the following RBAC permissions: Storage Blob Data Contributor on the storage account, AcrPull on the container registry. All infrastructure configuration values MUST be explicitly provided either in environment-specific tfvars files (for direct Terraform usage) or via TF*VAR* prefixed environment variables (for azd usage) with no defaults. Terraform modules MUST be organized with separate files for resource definitions (main.tf), variable declarations (variables.tf), outputs (outputs.tf), and provider version constraints (versions.tf). Infrastructure deployment MUST be managed through Azure Developer CLI (azd) with azure.yaml configuration for environment management, with azd passing variables to Terraform via TF*VAR* environment variables.
 - **FR-050**: System MUST support embedded hardware deployment with resource constraints documentation
 - **FR-051**: System MUST include CI/CD pipeline configuration for automated testing, optimization, and deployment
 - **FR-052**: System MUST provide Jupyter notebook interface for all operations: train, evaluate, optimize, deploy, containerize

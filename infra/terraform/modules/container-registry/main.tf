@@ -1,32 +1,16 @@
-variable "resource_group_name" {
-  description = "Name of the resource group"
-  type        = string
+locals {
+  # Remove hyphens for container registry naming
+  # ACR only allows alphanumeric characters
+  sanitized_suffix = replace(lower(var.suffix), "-", "")
 }
 
-variable "location" {
-  description = "Azure region"
-  type        = string
-}
-
-variable "acr_name" {
-  description = "Name of the container registry"
-  type        = string
-}
-
-variable "sku" {
-  description = "SKU for ACR"
-  type        = string
-  default     = "Basic"
-}
-
-variable "tags" {
-  description = "Tags to apply to resources"
-  type        = map(string)
-  default     = {}
+module "naming" {
+  source = "Azure/naming/azurerm"
+  suffix = [local.sanitized_suffix]
 }
 
 resource "azurerm_container_registry" "main" {
-  name                = var.acr_name
+  name                = module.naming.container_registry.name_unique
   resource_group_name = var.resource_group_name
   location            = var.location
   sku                 = var.sku
@@ -35,29 +19,20 @@ resource "azurerm_container_registry" "main" {
   tags = var.tags
 }
 
-output "acr_id" {
-  description = "ID of the container registry"
-  value       = azurerm_container_registry.main.id
-}
+resource "azurerm_monitor_diagnostic_setting" "acr" {
+  name                       = "diag-${azurerm_container_registry.main.name}"
+  target_resource_id         = azurerm_container_registry.main.id
+  log_analytics_workspace_id = var.log_analytics_workspace_id
 
-output "acr_name" {
-  description = "Name of the container registry"
-  value       = azurerm_container_registry.main.name
-}
+  enabled_log {
+    category = "ContainerRegistryRepositoryEvents"
+  }
 
-output "acr_login_server" {
-  description = "Login server URL"
-  value       = azurerm_container_registry.main.login_server
-}
+  enabled_log {
+    category = "ContainerRegistryLoginEvents"
+  }
 
-output "admin_username" {
-  description = "Admin username for ACR"
-  value       = azurerm_container_registry.main.admin_username
-  sensitive   = true
-}
-
-output "admin_password" {
-  description = "Admin password for ACR"
-  value       = azurerm_container_registry.main.admin_password
-  sensitive   = true
+  metric {
+    category = "AllMetrics"
+  }
 }
