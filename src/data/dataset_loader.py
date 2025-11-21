@@ -279,7 +279,7 @@ def load_tokenizer(
     Load and configure tokenizer.
 
     Args:
-        model_name_or_path: Model name or path
+        model_name_or_path: Model name or path (HuggingFace ID or local path)
         padding_side: Side to pad on ('right' or 'left')
 
     Returns:
@@ -287,7 +287,9 @@ def load_tokenizer(
     """
     from transformers import AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name_or_path, trust_remote_code=True
+    )
 
     # Ensure pad token is set
     if tokenizer.pad_token is None:

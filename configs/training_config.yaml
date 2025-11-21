@@ -3,7 +3,9 @@
 
 # Model Configuration
 model:
-  name_or_path: "models/phi-4" # Path to downloaded model
+  # Use HuggingFace model ID for compatibility with transformers library
+  # Azure ML compute can download directly from HuggingFace Hub
+  name_or_path: "microsoft/phi-4"
   trust_remote_code: true
 
 # LoRA Configuration
@@ -54,7 +56,7 @@ training:
 # Data Configuration
 data:
   train_file: "data/processed/train.jsonl"
-  validation_file: "data/processed/validation.jsonl"
+  validation_file: "data/processed/val.jsonl"
   max_seq_length: 2048
   prompt_column: "prompt"
   completion_column: "completion"

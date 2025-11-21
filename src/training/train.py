@@ -3,7 +3,6 @@
 Handles full pipeline: data loading, model setup, training loop, checkpointing,
 and optional MLflow tracking.
 """
-from src.data.dataset_loader import create_data_collator, load_tokenizer
 import argparse
 import os
 import sys
@@ -13,6 +12,8 @@ from typing import Any, Optional
 import torch
 import yaml
 from torch.utils.data import DataLoader
+
+from src.data.dataset_loader import create_data_collator, load_tokenizer
 
 # Insert repository root (parent of 'src') into sys.path before importing src.*
 project_root = Path(__file__).resolve().parents[2]
@@ -107,6 +108,15 @@ def main(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     logger.info(f"Loaded config from {args.config}")
 
+    # Override data paths if provided via command line
+    # This allows Azure ML to pass mounted data paths
+    if args.train_file:
+        config["data"]["train_file"] = args.train_file
+        logger.info(f"Using train file from args: {args.train_file}")
+    if args.validation_file:
+        config["data"]["validation_file"] = args.validation_file
+        logger.info(f"Using validation file from args: {args.validation_file}")
+
     # Setup MLflow
     setup_mlflow(config)
 
@@ -116,8 +126,13 @@ def main(args: argparse.Namespace) -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    # Load tokenizer
+    # Get model identifier - can be HuggingFace model ID or local path
+    # If it's a HuggingFace ID (e.g., "microsoft/phi-4"),
+    # transformers will auto-download
     model_path = config["model"]["name_or_path"]
+    logger.info(f"Using model: {model_path}")
+
+    # Load tokenizer (will auto-download from HuggingFace if needed)
     tokenizer = load_tokenizer(model_path)
 
     # Load datasets
@@ -270,6 +285,18 @@ if __name__ == "__main__":
         type=str,
         default="configs/training_config.yaml",
         help="Path to training configuration YAML",
+    )
+    parser.add_argument(
+        "--train-file",
+        type=str,
+        default=None,
+        help="Path to training data file (overrides config)",
+    )
+    parser.add_argument(
+        "--validation-file",
+        type=str,
+        default=None,
+        help="Path to validation data file (overrides config)",
     )
 
     args = parser.parse_args()

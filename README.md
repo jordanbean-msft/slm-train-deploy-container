@@ -6,39 +6,68 @@ Train small language models (SLMs) using Azure ML and deploy them as highly opti
 
 ## Workflow Overview
 
-```mermaid
-graph TD
-    A[Setup Environment] -->|uv sync| B[Azure Authentication]
-    B -->|az login| C[Provision with Terraform]
-    C -->|Creates resources| D[Configure .env]
-    D -->|Copy Terraform outputs| E[Prepare Training Data]
-    E -->|JSONL format| F[Upload to Azure Blob]
-    F --> G[Register Dataset in Azure ML]
-    G --> H[Create Training Environment]
-    H -->|conda.yaml| I[Build Environment Image]
-    I -->|Docker build in prepare_image experiment| J[Submit Training Job]
-    J -->|Waits for image| K[Job: Preparing Status]
-    K -->|Image ready| L[Download Base Model]
-    L -->|Phi-4 from AI Foundry| M[Job: Running - Fine-tune on GPU]
-    M --> N[Download Trained Model]
-    N --> O[Optimize Model]
-    O -->|Quantize int8/int4| P[Export to ONNX]
-    O --> Q[Benchmark Performance]
-    P --> Q
-    Q --> R[Build Container]
-    R -->|Multi-stage Dockerfile| S[Test Locally]
-    S -->|Health checks| T{Deploy Target?}
-    T -->|ACR| U[Push to Azure Container Registry]
-    T -->|Embedded| V[Deploy to Edge Device]
-    U --> W[Production Inference]
-    V --> W
-    W -->|FastAPI endpoint| X[Monitor Performance]
+This diagram shows the complete workflow from setup to deployment, organized by the notebooks that orchestrate each phase:
 
-    style A fill:#e1f5ff
-    style C fill:#e1f5ff
-    style D fill:#e1f5ff
-    style I fill:#fff3cd
-    style K fill:#fff3cd
+```mermaid
+graph TB
+    subgraph Setup["🔧 Initial Setup (Manual)"]
+        A[Install Dependencies<br/>uv sync] --> B[Azure Login<br/>az login]
+        B --> C[Deploy Infrastructure<br/>azd up or terraform apply]
+        C --> D[Configure .env<br/>azd env get-values]
+    end
+
+    subgraph NB01["📓 Notebook 01: Prepare Data"]
+        E[Load Training Data<br/>JSONL format] --> F[Validate Format<br/>prompt + completion]
+        F --> G[Split Train/Val<br/>80/20]
+        G --> H[Upload to Azure Blob<br/>training-data container]
+        H --> I[Register in Azure ML<br/>Data asset]
+    end
+
+    subgraph NB02["📓 Notebook 02: Submit Training Job"]
+        J[Create ML Environment<br/>conda.yaml → Docker image] --> K[Build Environment<br/>prepare_image experiment]
+        K --> L[Submit Training Job<br/>python -m src.training.train]
+        L --> M[Job Status: Preparing<br/>Wait for environment]
+        M --> N[Job Status: Running<br/>Auto-download Phi-4 from Azure AI Foundry]
+        N --> O[Fine-tune with LoRA<br/>GPU training on compute cluster]
+        O --> P[Save Checkpoints<br/>Azure ML datastore]
+    end
+
+    subgraph NB03["📓 Notebook 03: Download Model"]
+        Q[Download Checkpoints<br/>From Azure ML outputs] --> R[Load Best Model<br/>Based on eval_loss]
+        R --> S[Verify Model Files<br/>Config, weights, tokenizer]
+    end
+
+    subgraph NB04["📓 Notebook 04: Optimize Model"]
+        T[Merge LoRA Adapters<br/>Combine with base model] --> U[Quantize Model<br/>INT8/INT4]
+        U --> V[Export to ONNX<br/>Optimized inference]
+        V --> W[Benchmark Performance<br/>Latency + throughput]
+    end
+
+    subgraph NB05["📓 Notebook 05: Build & Push Container"]
+        X[Build Docker Image<br/>Multi-stage Dockerfile] --> Y[Test Locally<br/>Health checks]
+        Y --> Z[Push to ACR<br/>Multi-arch support]
+    end
+
+    subgraph NB06["📓 Notebook 06: Deploy"]
+        AA[Deploy to Azure Container Apps<br/>Serverless inference] --> AB[Configure Auto-scaling<br/>0 to N replicas]
+        AB --> AC[Test Endpoint<br/>POST /generate]
+        AC --> AD[Monitor Metrics<br/>Latency, throughput, cost]
+    end
+
+    Setup --> NB01
+    NB01 --> NB02
+    NB02 --> NB03
+    NB03 --> NB04
+    NB04 --> NB05
+    NB05 --> NB06
+
+    style Setup fill:#e1f5ff
+    style NB01 fill:#d4edda
+    style NB02 fill:#fff3cd
+    style NB03 fill:#cce5ff
+    style NB04 fill:#f8d7da
+    style NB05 fill:#d1ecf1
+    style NB06 fill:#d4edda
 ```
 
 ## Overview
@@ -207,16 +236,100 @@ uv run jupyter notebook
 
 Execute the notebooks in this order:
 
-1. `notebooks/01-prepare-data.ipynb` - Prepare and upload training data to Azure ML
-2. `notebooks/02-submit-training-job.ipynb` - Create training environment & submit remote training job
-   - **Environment Creation**: Builds Docker image with PyTorch, CUDA, dependencies (5-15 min)
-   - **Job Submission**: Queues training job (waits for environment if needed)
-   - **Training**: Base model auto-downloads from Azure AI Foundry, then fine-tunes on GPU
-3. `notebooks/03-download-trained-model.ipynb` - Retrieve trained checkpoints & registry model
-4. `notebooks/04-optimize-model.ipynb` - Quantize (int8/int4) & export ONNX, benchmark
-5. `notebooks/05-evaluate-model.ipynb` - Evaluate optimized vs baseline metrics
-6. `notebooks/06-push-to-acr.ipynb` - Build and push optimized container image to Azure Container Registry
-7. `notebooks/07-deploy-inference.ipynb` - Deploy to Azure Container Apps or embedded device
+### 📓 Notebook 01: Prepare Data
+
+**File**: `notebooks/01-prepare-data.ipynb`
+
+**What it does**:
+
+- Loads training data from `data/training_data.jsonl`
+- Validates JSONL format (prompt + completion fields)
+- Splits into train/validation sets (80/20)
+- Uploads to Azure Blob Storage
+- Registers as Azure ML data asset
+
+**Duration**: ~5-10 minutes
+
+---
+
+### 📓 Notebook 02: Submit Training Job
+
+**File**: `notebooks/02-submit-training-job.ipynb`
+
+**What it does**:
+
+- Creates Azure ML environment from `configs/conda.yaml`
+- Triggers Docker image build (`prepare_image` experiment, 5-15 min)
+- Submits training job to compute cluster
+- Job automatically downloads Phi-4 from Azure AI Foundry registry
+- Fine-tunes model with LoRA on GPU cluster
+- Saves checkpoints to Azure ML datastore
+
+**Duration**: ~30-120 minutes (includes environment build + training)
+
+**Key statuses**:
+
+- `Preparing`: Waiting for environment image build
+- `Running`: Active GPU training with auto-downloaded base model
+
+---
+
+### 📓 Notebook 03: Download Trained Model
+
+**File**: `notebooks/03-download-trained-model.ipynb`
+
+**What it does**:
+
+- Downloads best checkpoint from Azure ML (based on eval_loss)
+- Loads trained model and verifies files
+- Validates model can generate text
+
+**Duration**: ~5-10 minutes
+
+---
+
+### 📓 Notebook 04: Optimize Model
+
+**File**: `notebooks/04-optimize-model.ipynb`
+
+**What it does**:
+
+- Merges LoRA adapters into base model
+- Quantizes to INT8/INT4 (50-75% size reduction)
+- Exports to ONNX format
+- Benchmarks inference latency and throughput
+
+**Duration**: ~10-20 minutes
+
+---
+
+### 📓 Notebook 05: Build & Push Container
+
+**File**: `notebooks/05-push-to-acr.ipynb`
+
+**What it does**:
+
+- Builds Docker image with optimized model
+- Tests container locally with health checks
+- Pushes multi-arch image to Azure Container Registry
+- Supports ARM64 and x86_64 architectures
+
+**Duration**: ~15-30 minutes
+
+---
+
+### 📓 Notebook 06: Deploy Inference
+
+**File**: `notebooks/06-deploy-inference.ipynb`
+
+**What it does**:
+
+- Deploys container to Azure Container Apps
+- Configures auto-scaling (0 to N replicas)
+- Tests inference endpoint (`POST /generate`)
+- Sets up monitoring for latency and throughput
+
+**Duration**: ~10-15 minutes
 
 **Important**: When running notebook 02, Azure ML automatically builds a Docker environment image (shown in `prepare_image` experiment). Your training job will show "Preparing" status until this image build completes, then transitions to "Running" for actual training.
 
